@@ -12,7 +12,11 @@
             <el-button type="primary" plain @click="save">保存</el-button>
             <span>*保存至浏览器缓存，方便下次访问</span>
         </div>
-        <el-form class="formD">
+        <el-form class="formD"
+                 v-loading="loading"
+                 element-loading-text="拼命加载中"
+                 element-loading-spinner="el-icon-loading"
+                 element-loading-background="rgba(0, 0, 0, 0)">
             <el-form-item label="别人的淘口令：">
                 <el-input type="textarea"
                           :rows="4"
@@ -32,7 +36,7 @@
             <el-form-item label="商品推广文案">
                 <el-input type="textarea"
                           :rows="4"
-                          placeholder="填写自己的商品推广文案，会根据上述文案自动剔除淘口令"
+                          placeholder="填写自己的商品推广文案，会根据上述文案自动剔除链接和淘口令"
                           id="selfText"
                           v-model="selfText"></el-input>
             </el-form-item>
@@ -52,6 +56,7 @@
                            alt="复制"
                            circle></el-button>
             </el-form-item>
+            <div class="tips">* 先点击【解析别人的淘口令】，弹出成功提示，再点击【生成自己的淘口令】</div>
             <el-form-item>
                 <el-button type="primary" plain @click="onConvertSc">解析别人的淘口令</el-button>
                 <el-button type="danger" plain @click="onCreateSc">生成自己的淘口令</el-button>
@@ -77,8 +82,11 @@
                 otherTkl: '',
                 selfTkl: '',
                 selfText: '',
+                shortUrl: '',
+                loading: false,
                 result: null,
                 timeout: null,
+                timer: null,
             }
         },
         created(){
@@ -106,13 +114,41 @@
                     params.adzone_id = pidObj.adzone_id;
                     params.site_id = pidObj.site_id;
                     params.session = _this.sessionKey;
+                    _this.loading = true;
                     http().getTpwdConvertSc(params).then(res => {
                         _this.result = res.data;
-                        _this.$message({
-                            message: '获取转链成功',
-                            type: 'success',
-                            center: true,
-                        });
+                        if (res.code) {
+                            _this.$message.error(res.sub_msg);
+                        } else {
+                            let obj = {};
+                            let tmpObj = {};
+                            tmpObj.url = _this.result.click_url;
+                            obj.requests = [];
+                            obj.requests.push(tmpObj)
+                            clearTimeout(_this.timer);
+                            _this.timer = setTimeout(() => {
+                                http().getSpreadGet(obj).then(res => {
+                                    _this.loading = false;
+                                    _this.$message({
+                                        message: '获取转链成功',
+                                        type: 'success',
+                                        center: true,
+                                    });
+                                    if (res.code) {
+                                        _this.$message.error(res.sub_msg);
+                                    } else {
+                                        _this.shortUrl = res.results.tbk_spread[0].content;
+                                    }
+                                }).catch((err)=>{
+                                    _this.loading = false;
+                                    console.log(err)
+                                })
+                            }, 1200);
+
+                        }
+                    }).catch((err)=>{
+                        _this.loading = false;
+                        console.log(err)
                     })
                 } else {
                     _this.$message.error('有参数为空');
@@ -127,13 +163,24 @@
                     params.text = _this.selfText;
                     params.url = _this.result.click_url;
                     params.user_id = pidObj.user_id;
+                    _this.loading = true;
                     http().getTpwdCreate(params).then(res => {
-                        _this.selfTkl = _this.selfText +  res.data.model;
-                        _this.$message({
-                            message: '生成淘口令成功',
-                            type: 'success',
-                            center: true,
-                        });
+                        _this.loading = false;
+                        if (res.code) {
+                            _this.$message.error(res.sub_msg);
+                        } else {
+                            _this.selfTkl = _this.selfText+ '\n'+
+                                    '链接 '+_this.shortUrl+ '\n'+
+                                    '口令 '+res.data.model;
+                            _this.$message({
+                                message: '生成淘口令成功',
+                                type: 'success',
+                                center: true,
+                            });
+                        }
+                    }).catch((err)=>{
+                        _this.loading = false;
+                        console.log(err)
                     })
                 }
             },
@@ -167,9 +214,20 @@
                 }
             },
             changeSelfText(val){
-                let reg = '[^\u4e00-\u9fa5]\\w{11}[^\u4e00-\u9fa5]';
-                this.selfText = val.replace(new RegExp(reg), '');
+                // 淘口令正则匹配
+                let regTkl = '[^\u4e00-\u9fa5]\\w{11}[^\u4e00-\u9fa5]';
+                // url正则匹配
+                let regUrl = '[a-zA-z]+://[^\\s]*';
+                let tmpTxt = val.replace(new RegExp(regTkl), '');
+                tmpTxt = tmpTxt.replace(new RegExp(regUrl), '');
+                tmpTxt = tmpTxt.replace("链接", '');
+                tmpTxt = tmpTxt.replace("口令", '');
+                this.selfText = tmpTxt.trim();
             }
+        },
+        beforeDestroy(){
+            clearTimeout(this.timeout);
+            clearTimeout(this.timer);
         }
     }
 </script>
@@ -204,6 +262,14 @@
                 position: absolute;
                 bottom: 10px;
                 right: 10px;
+            }
+            .tips{
+                font-size: 12px;
+                color: #E46365;
+                margin-bottom: 10px;
+            }
+            button{
+                margin-bottom: 30px;
             }
 
         }

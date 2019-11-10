@@ -58,6 +58,9 @@ export default () => {
         async getTpwdCreate(obj) {
             return handleRequest(await request.post(urls.tpwdCreate, obj))
         },
+        async getSpreadGet(obj) {
+            return handleRequest(await request.post(urls.spreadGet, obj))
+        },
 
     }
 }
