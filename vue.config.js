@@ -15,6 +15,7 @@ module.exports = {
             }
         }
     },
+    lintOnSave: false,  //关闭内置Eslint检查
     // 以下是pwa配置
     pwa: {
         iconPaths: {

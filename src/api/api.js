@@ -61,6 +61,9 @@ export default () => {
         async getSpreadGet(obj) {
             return handleRequest(await request.post(urls.spreadGet, obj))
         },
+        async getPrivilegeGet(obj) {
+            return handleRequest(await request.post(urls.privilegeGet, obj))
+        },
 
     }
 }
