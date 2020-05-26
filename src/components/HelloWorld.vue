@@ -47,8 +47,7 @@
                           v-model="selfTkl"></el-input>
             </el-form-item>
             <el-form-item>
-                <el-button type="primary" plain @click="onConvertSc">一键生成淘口令</el-button>
-                <!--<el-button type="danger" plain @click="onCreateSc">生成自己的淘口令</el-button>-->
+                <el-button type="primary" plain @click.prevent="onConvertSc">一键生成淘口令</el-button>
                 <el-button class="copy"
                            type="warning"
                            data-clipboard-action="copy"
@@ -112,7 +111,8 @@
                 sessionKey: '',
                 pidObj: {
                     site_id: '',    //三段式第二段：备案的网站id
-                    adzone_id: ''   //三段式第三段：推广位id
+                    adzone_id: '',   //三段式第三段：推广位id
+                    user_id: ''
                 },
                 otherTkl: '',
                 selfTkl: '',
@@ -120,7 +120,6 @@
                 shortUrl: '',
                 loading: false,
                 downloadLoading: false,
-                result: null,
                 timeout: null,
                 timer: null,
                 fileListUpload:[],
@@ -128,8 +127,6 @@
                 tableData2: [],
                 fileTemp: null,
                 multipleSelection: [],
-                item_id: '',
-                coupon_url: '',
                 coupon_info: '',
                 reqFlag: true,
                 reqCount: 0,
@@ -153,159 +150,112 @@
             },
         },
         methods: {
-            onConvertSc() {
+            async onConvertSc() {
                 console.log('解析&转链淘口令!');
                 let _this = this;
-                let pidObj = _this.storage.get('qianqian_tkl_pid_json');
-                if (pidObj && _this.sessionKey.trim() && _this.otherTkl.trim()){
+                _this.pidObj = _this.storage.get('qianqian_tkl_pid_json');
+                if (_this.pidObj && _this.sessionKey.trim() && _this.otherTkl.trim()){
                     let params = {}
                     params.password_content = _this.otherTkl;
-                    params.adzone_id = pidObj.adzone_id;
-                    params.site_id = pidObj.site_id;
+                    params.adzone_id = _this.pidObj.adzone_id;
+                    params.site_id = _this.pidObj.site_id;
                     params.session = _this.sessionKey;
-                    _this.loading = true;
-                    // 解析淘口令
-                    http().getTpwdConvertSc(params).then(res => {
-                        _this.result = res.data;
-                        if (res.code) {
-                            _this.$message.error(res.sub_msg);
-                        } else {
-                            _this.item_id = _this.result.num_iid;
-                            let params = {};
-                            params.adzone_id = pidObj.adzone_id;
-                            params.site_id = pidObj.site_id;
-                            params.session = _this.sessionKey;
-                            params.item_id = _this.item_id;
-                            clearTimeout(_this.timer);
-                            _this.timer = setTimeout(()=>{
-                                // 高佣转链
-                                http().getPrivilegeGet(params).then(res => {
-                                    if (res.code) {
-                                        _this.$message.error(res.sub_msg);
-                                    } else {
-                                        _this.coupon_url = res.result.data.coupon_click_url;
-                                        _this.coupon_info = res.result.data.coupon_info;
-                                        let obj = {};
-                                        let tmpObj = {};
-                                        tmpObj.url = _this.coupon_url;
-                                        obj.requests = [];
-                                        obj.requests.push(tmpObj)
-                                        clearTimeout(_this.timer);
-                                        _this.timer = setTimeout(() => {
-                                            // 长链转短链接
-                                            http().getSpreadGet(obj).then(res => {
-                                                if (res.code) {
-                                                    _this.$message.error(res.sub_msg);
-                                                } else {
-                                                    if(res.results.tbk_spread[0].err_msg != 'OK'){
-                                                        _this.$message.error(res.results.tbk_spread[0].err_msg);
-                                                    }else {
-                                                        _this.shortUrl = res.results.tbk_spread[0].content;
-                                                        clearTimeout(_this.timer);
-                                                        _this.timer = setTimeout(()=>{
-                                                            if(_this.selfText.trim()){
-                                                                let params = {};
-                                                                params.text = _this.selfText;
-                                                                params.url = _this.shortUrl;
-                                                                params.user_id = pidObj.user_id;
-                                                                // 生成淘口令
-                                                                http().getTpwdCreate(params).then(res => {
-                                                                    _this.loading = false;
-                                                                    if (res.code) {
-                                                                        _this.$message.error(res.sub_msg);
-                                                                    } else {
-                                                                        if (_this.coupon_info){
-                                                                            _this.selfTkl = _this.selfText+ '\n'+
-                                                                                '优惠卷 '+_this.coupon_info+ '\n'+
-                                                                                '链接 '+_this.shortUrl+ '\n'+
-                                                                                '口令 '+res.data.model;
-                                                                        } else {
-                                                                            _this.selfTkl = _this.selfText+ '\n'+
-                                                                                '链接 '+_this.shortUrl+ '\n'+
-                                                                                '口令 '+res.data.model;
-                                                                        }
-                                                                        _this.$message({
-                                                                            message: '生成淘口令成功',
-                                                                            type: 'success',
-                                                                            center: true,
-                                                                        });
-                                                                        // 自动复制到粘贴板
-                                                                    }
-                                                                }).catch((err)=>{
-                                                                    _this.loading = false;
-                                                                    _this.$message.error('加载数据失败');
-                                                                    console.log(err)
-                                                                })
-                                                            } else {
-                                                                _this.$message.error('文案为空');
-                                                            }
-                                                        },1200)
-                                                    }
-                                                }
-                                            }).catch((err)=>{
-                                                _this.loading = false;
-                                                _this.$message.error('加载数据失败');
-                                                console.log(err)
-                                            })
-                                        }, 1200);
-                                    }
-                                }).catch((err)=>{
-                                    _this.loading = false;
-                                    _this.$message.error('加载数据失败');
-                                    console.log(err)
-                                })
-                            }, 1200)
-                        }
-                    }).catch((err)=>{
-                        _this.loading = false;
-                        _this.$message.error('加载数据失败');
-                        console.log(err)
-                    })
+                    const tkl = await _this.reqGetTpwdConvertSc(params)
+                    console.log(tkl)
                 } else {
                     _this.$message.error('有参数为空');
                 }
             },
-            onCreateSc() {
-                console.log('生成淘口令!');
-                let _this = this;
-                let pidObj = _this.storage.get('qianqian_tkl_pid_json');
-                if(_this.shortUrl && _this.selfText.trim()){
-                    let params = {};
-                    params.text = _this.selfText;
-                    params.url = _this.shortUrl;
-                    params.user_id = pidObj.user_id;
-                    _this.loading = true;
-                    http().getTpwdCreate(params).then(res => {
-                        _this.loading = false;
-                        if (res.code) {
-                            _this.$message.error(res.sub_msg);
-                        } else {
-                            if (_this.coupon_info){
-                                _this.selfTkl = _this.selfText+ '\n'+
-                                    '优惠卷 '+_this.coupon_info+ '\n'+
-                                    '链接 '+_this.shortUrl+ '\n'+
-                                    '口令 '+res.data.model;
-                            } else {
-                                _this.selfTkl = _this.selfText+ '\n'+
-                                    '链接 '+_this.shortUrl+ '\n'+
-                                    '口令 '+res.data.model;
-                            }
-                            _this.$message({
-                                message: '生成淘口令成功',
-                                type: 'success',
-                                center: true,
-                            });
-                            // 自动复制到粘贴板
-                            // _this.copyTxt();
+            // 1.解析淘口令
+            reqGetTpwdConvertSc(params) {
+                let _this = this
+                _this.loading = true;
+                http().getTpwdConvertSc(params).then(res => {
+                    _this.loading = false;
+                    if (res.code) {
+                        _this.$message.error(res.sub_msg);
+                    } else {
+                        return Object.assign({}, params, {item_id: res.data.num_iid})
+                    }
+                }).catch((err)=>{
+                    _this.loading = false;
+                    console.log(err)
+                })
+            },
+            // 2.高佣转链
+            reqGetPrivilegeGet(params) {
+                let _this = this
+                http().getPrivilegeGet(params).then(res => {
+                    if (res.code) {
+                        _this.$message.error(res.sub_msg);
+                    } else {
+                        _this.coupon_info = res.result.data.coupon_info;
+                        let tmpObj = {
+                            url: res.result.data.coupon_click_url
+                        };
+                        return {
+                            requests: [tmpObj]
                         }
-                    }).catch((err)=>{
-                        _this.loading = false;
-                        _this.$message.error('加载数据失败');
-                        console.log(err)
-                    })
-                } else {
-                    _this.$message.error('链接或文案为空');
-                }
+                    }
+                }).catch((err)=>{
+                    console.log(err)
+                })
+            },
+            // 3.长链转短链接
+            reqGetSpreadGet(params) {
+                let _this = this
+                http().getSpreadGet(params).then(res => {
+                    if (res.code) {
+                        _this.$message.error(res.sub_msg);
+                    } else {
+                        if(res.results.tbk_spread[0].err_msg !== 'OK'){
+                            _this.$message.error(res.results.tbk_spread[0].err_msg);
+                        }else {
+                            _this.shortUrl = res.results.tbk_spread[0].content;
+                            if(_this.selfText.trim()){
+                                return {
+                                    text: _this.selfText,
+                                    url: _this.shortUrl,
+                                    user_id: _this.pidObj.user_id
+                                };
+                            } else {
+                                _this.$message.error('文案为空');
+                            }
+                        }
+                    }
+                }).catch((err)=>{
+                    console.log(err)
+                })
+            },
+            // 4.生成淘口令
+            reqGetTpwdCreate(params) {
+                let _this = this
+                http().getTpwdCreate(params).then(res => {
+                    if (res.code) {
+                        _this.$message.error(res.sub_msg);
+                    } else {
+                        if (_this.coupon_info){
+                            _this.selfTkl = `${_this.selfText}
+                                优惠卷：${_this.coupon_info}
+                                链接：${_this.shortUrl}
+                                口令：${res.data.model}
+                            `
+                        } else {
+                            _this.selfTkl = `${_this.selfText}
+                                链接：${_this.shortUrl}
+                                口令：${res.data.model}
+                            `
+                        }
+                        _this.$message({
+                            message: '生成淘口令成功',
+                            type: 'success',
+                            center: true,
+                        });
+                        // 自动复制到粘贴板
+                    }
+                }).catch((err)=>{
+                    console.log(err)
+                })
             },
             clearTxt(){
                 this.otherTkl = '';
