@@ -58,6 +58,7 @@
                                 :file-list="fileListUpload"
                                 :limit="limitUpload"
                                 accept="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
+                                :befor-upload="handleBeforeUpload"
                                 :auto-upload="false">
                             <el-button size="small" type="primary" >批量上传</el-button>
                             <span slot="tip" class="el-upload__tip">注：只能上传Excel文件</span>
@@ -131,7 +132,6 @@
             async onConvertSc() {
                 console.log('解析&转链淘口令!');
                 let _this = this;
-                _this.pidObj = _this.storage.get('qianqian_tkl_pid_json');
                 if (_this.pidObj && _this.sessionKey.trim() && _this.otherTkl.trim()){
                     let params = {}
                     params.password_content = _this.otherTkl;
@@ -145,6 +145,28 @@
                         const tpwdCreate = await _this.reqGetTpwdCreate(spreadGet)
                         _this.selfTkl = _this.changeSelfText(_this.otherTkl, tpwdCreate.url, tpwdCreate.tkl)
                         console.log(tpwdCreate)
+                    } catch (e) {
+                        console.log(e)
+                    }
+                } else {
+                    _this.$message.error('有参数为空');
+                }
+            },
+            async onBatchConvertSc(otherTkl) {
+                console.log('批量解析&转链淘口令!');
+                let _this = this;
+                if (_this.pidObj && _this.sessionKey && otherTkl){
+                    let params = {}
+                    params.password_content = otherTkl;
+                    params.adzone_id = _this.pidObj.adzone_id;
+                    params.site_id = _this.pidObj.site_id;
+                    params.session = _this.sessionKey;
+                    try {
+                        const convertSc = await _this.reqGetTpwdConvertSc(params)
+                        const privilegeGet = await _this.reqGetPrivilegeGet(convertSc)
+                        const spreadGet = await _this.reqGetSpreadGet(privilegeGet)
+                        const tpwdCreate = await _this.reqGetTpwdCreate(spreadGet)
+                        return _this.changeSelfText(otherTkl, tpwdCreate.url, tpwdCreate.tkl)
                     } catch (e) {
                         console.log(e)
                     }
@@ -266,7 +288,7 @@
             save(){
                 //mm_669390059_989100147_109618950049
                 let _this = this;
-                if (_this.pid.trim() != '' && _this.sessionKey.trim() != ''){
+                if (_this.pid.trim() !== '' && _this.sessionKey.trim() !== ''){
                     let pidArr = _this.pid.split('_');
                     console.log(pidArr)
                     let len = pidArr.length;
@@ -288,6 +310,7 @@
                     this.pid = pid;
                     this.sessionKey = s;
                 }
+                this.pidObj = this.storage.get('qianqian_tkl_pid_json');
             },
             changeSelfText(val, newUrl, newTkl){
                 // 淘口令正则匹配
@@ -298,25 +321,26 @@
                     .replace(new RegExp(regTkl), newTkl);
                 return val.trim();
             },
-            // excel表上传
-            handleChange(file, fileList){
-                this.fileTemp = file.raw
-                // 判断上传文件格式
-                if(this.fileTemp){
-                    if((this.fileTemp.type == 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') || (this.fileTemp.type == 'application/vnd.ms-vendor')){
-                        this.importfxx(this.fileTemp)
-                    } else {
-                        this.$message({
-                            type:'warning',
-                            message:'附件格式错误，请重新上传！'
-                        })
-                    }
-                } else {
-                    this.$message({
+            // 上传前对文件进行校验
+            handleBeforeUpload(file) {
+                let _this = this
+                const typeList = ["xls", "xlsx"];
+                const fileName = file.name;
+                const extension = fileName.substr(fileName.lastIndexOf(".") + 1);
+                const isRT = typeList.includes(extension);
+                if (!isRT) {
+                    _this.$message({
                         type:'warning',
-                        message:'请上传附件！'
+                        message:'附件格式错误，请重新上传！'
                     })
                 }
+                return isRT;
+            },
+            // excel表上传
+            handleChange(file, fileList){
+                let _this = this
+                _this.fileTemp = file.raw
+                _this.importfxx(_this.fileTemp);
             },
             // 移除excel表
             handleRemove(file,fileList){
@@ -324,53 +348,41 @@
             },
             importfxx(obj) {
                 let _this = this;
-                // 通过DOM取文件数据
-                this.file = obj
-                var rABS = false; //是否将文件读取为二进制字符串
-                var f = this.file;
-                var reader = new FileReader();
-                FileReader.prototype.readAsBinaryString = function(f) {
-                    var binary = "";
-                    var rABS = false; //是否将文件读取为二进制字符串
-                    var pt = this;
-                    var wb; //读取完成的数据
-                    var outdata;
-                    var reader = new FileReader();
+                _this.file = obj
+                const reader = new FileReader();
+                FileReader.prototype.readAsBinaryString = function(file) {
+                    let binary = "";
+                    let wb = null; //读取完成的数据
+                    let outdata = null;
+                    let reader = new FileReader();
                     reader.onload = function(e) {
-                        var bytes = new Uint8Array(reader.result);
-                        var length = bytes.byteLength;
-                        for(var i = 0; i < length; i++) {
+                        let bytes = new Uint8Array(reader.result);
+                        for(let i = 0,len = bytes.byteLength; i < len; i++) {
                             binary += String.fromCharCode(bytes[i]);
                         }
-                        var XLSX = require('xlsx');
-                        if(rABS) {
-                            wb = XLSX.read(btoa(fixdata(binary)), { //手动转化
-                                type: 'base64'
-                            });
-                        } else {
-                            wb = XLSX.read(binary, {
-                                type: 'binary'
-                            });
-                        }
+                        const XLSX = require('xlsx');
+                        wb = XLSX.read(binary, {
+                            type: 'binary'
+                        });
                         outdata = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);//outdata就是读取excel内容之后输出的东西
-                        this.da = [...outdata]
+                        let da = [...outdata]
                         let arr = []
-                        this.da.map(v => {
-                            let obj = {}
-                            obj.tb_otherTkl = v['别人的淘口令']
-                            obj.tb_selfTkl = v['生成的自己的淘口令']
+                        da.map(v => {
+                            let obj = {
+                                tb_otherTkl: v['别人的淘口令']?v['别人的淘口令']:'',
+                                tb_selfTkl: v['生成的自己的淘口令']?v['生成的自己的淘口令']:''
+                            };
                             arr.push(obj)
                         })
-                        //return arr
-                        // 把读取的excel表格中的内容放进tableData2中(这里要改成自己的表的名字)
+                        // 把读取的excel表格中的内容放进tableData2中
                         _this.tableData2 = _this.tableData2.concat(arr)
                     }
-                    reader.readAsArrayBuffer(f);
+                    reader.readAsArrayBuffer(file);
                 }
-                if(rABS) {
-                    reader.readAsArrayBuffer(f);
-                } else {
-                    reader.readAsBinaryString(f);
+                try {
+                    reader.readAsBinaryString(_this.file)
+                } catch (e) {
+                    console.log(e)
                 }
             },
             exportEX(){ // 导出Excel表格
@@ -399,20 +411,28 @@
             },
             onMuchSc(){
                 console.log('批量生成！')
-                if (this.tableData2.length > 0) {
+                let _this = this
+                // if (_this.tableData2.length > 0) {
                     //  * 尽量避免使用for循环请求，而要用递归的方式
-                    this.reqCount = this.tableData2.length;
-                    this.onMuchRequest();
-                }
-            },
-            onMuchRequest(){
-                console.log('批量请求！')
-                if(this.reqCount > 0){  // 判断 1.是否请求成功 2.是否到达请求次数
-                    let _this = this;
-
+                    // _this.reqCount = _this.tableData2.length;
+                    _this.reqCount = 2;
+                    if(_this.reqCount > 0){  // 判断 1.是否请求成功 2.是否到达请求次数
+                        // let res = _this.onBatchConvertSc(_this.tableData2[_this.reqCount-1].tb_otherTkl)
+                        // res.then((data) => {
+                            // console.log(data)
+                            // if (data) {
+                                // _this.tableData2[_this.reqCount-1].tb_selfTkl = data;
+                                _this.reqCount--;
+                                clearTimeout(_this.timer);
+                                _this.timer = setTimeout(() => {
+                                    console.log(_this.reqCount)
+                                    _this.onMuchSc()
+                                }, 1000)
+                            // }
+                        // })
+                    // }
                 }
             }
-
         },
         beforeDestroy(){
             clearTimeout(this.timer);
