@@ -12,11 +12,7 @@
             <el-button type="primary" plain @click="save">保存</el-button>
             <span>*保存至浏览器缓存，方便下次访问</span>
         </div>
-        <el-form class="formD"
-                 v-loading="loading"
-                 element-loading-text="拼命加载中"
-                 element-loading-spinner="el-icon-loading"
-                 element-loading-background="rgba(0, 0, 0, 0)">
+        <el-form class="formD">
             <el-form-item label="别人的淘口令：">
                 <el-input type="textarea"
                           :rows="4"
@@ -118,7 +114,6 @@
                 selfTkl: '',
                 selfText: '',
                 shortUrl: '',
-                loading: false,
                 downloadLoading: false,
                 timeout: null,
                 timer: null,
@@ -177,17 +172,14 @@
             // 1.解析淘口令
             reqGetTpwdConvertSc(params) {
                 let _this = this
-                _this.loading = true;
                 return new Promise((resolve, reject) => {
                     http().getTpwdConvertSc(params).then(res => {
-                        _this.loading = false;
                         if (res.code) {
                             _this.$message.error(res.sub_msg);
                         } else {
                             resolve(Object.assign({}, params, {item_id: res.data.num_iid}))
                         }
                     }).catch((err)=>{
-                        _this.loading = false;
                         console.log(err)
                     })
                 })

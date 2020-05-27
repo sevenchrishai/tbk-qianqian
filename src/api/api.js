@@ -1,6 +1,7 @@
 import axios from 'axios'
 import urls from './url'
 import api_host from '@/api'
+import {showLoading, hideLoading} from '@/utils/loading.js'
 
 // 定义axios基本设置
 const request = axios.create({
@@ -16,6 +17,8 @@ request.interceptors.request.use(function (config) {
         requestTime: new Date().getTime(),
         'Content-Type': 'application/json; charset=utf-8'
     };
+    // 请求拦截进来调用显示loading效果
+    showLoading()
     return config
 }, function (error) {
     // 对请求错误做些什么
@@ -26,9 +29,16 @@ request.interceptors.request.use(function (config) {
 request.interceptors.response.use(function (response) {
     // 对响应数据做点什么
     response['Content-Type'] = 'application/json;charset=UTF-8'
+    // 响应拦截进来隐藏loading效果，此处采用延时处理是合并loading请求效果，避免多次请求loading关闭又开启
+    setTimeout(() => {
+        hideLoading()
+    }, 1500);
     return response
 }, function (error) {
     // 对响应错误做点什么
+    setTimeout(() => {
+        hideLoading()
+    }, 1500);
     return Promise.reject(error)
 })
 
