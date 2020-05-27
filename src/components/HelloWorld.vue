@@ -160,8 +160,16 @@
                     params.adzone_id = _this.pidObj.adzone_id;
                     params.site_id = _this.pidObj.site_id;
                     params.session = _this.sessionKey;
-                    const tkl = await _this.reqGetTpwdConvertSc(params)
-                    console.log(tkl)
+                    try {
+                        const convertSc = await _this.reqGetTpwdConvertSc(params)
+                        const privilegeGet = await _this.reqGetPrivilegeGet(convertSc)
+                        const spreadGet = await _this.reqGetSpreadGet(privilegeGet)
+                        const tpwdCreate = await _this.reqGetTpwdCreate(spreadGet)
+                        _this.selfTkl = tpwdCreate
+                        console.log(tpwdCreate)
+                    } catch (e) {
+                        console.log(e)
+                    }
                 } else {
                     _this.$message.error('有参数为空');
                 }
@@ -170,91 +178,103 @@
             reqGetTpwdConvertSc(params) {
                 let _this = this
                 _this.loading = true;
-                http().getTpwdConvertSc(params).then(res => {
-                    _this.loading = false;
-                    if (res.code) {
-                        _this.$message.error(res.sub_msg);
-                    } else {
-                        return Object.assign({}, params, {item_id: res.data.num_iid})
-                    }
-                }).catch((err)=>{
-                    _this.loading = false;
-                    console.log(err)
+                return new Promise((resolve, reject) => {
+                    http().getTpwdConvertSc(params).then(res => {
+                        _this.loading = false;
+                        if (res.code) {
+                            _this.$message.error(res.sub_msg);
+                        } else {
+                            resolve(Object.assign({}, params, {item_id: res.data.num_iid}))
+                        }
+                    }).catch((err)=>{
+                        _this.loading = false;
+                        console.log(err)
+                    })
                 })
             },
             // 2.高佣转链
             reqGetPrivilegeGet(params) {
                 let _this = this
-                http().getPrivilegeGet(params).then(res => {
-                    if (res.code) {
-                        _this.$message.error(res.sub_msg);
-                    } else {
-                        _this.coupon_info = res.result.data.coupon_info;
-                        let tmpObj = {
-                            url: res.result.data.coupon_click_url
-                        };
-                        return {
-                            requests: [tmpObj]
+                return new Promise((resolve, reject) => {
+                    http().getPrivilegeGet(params).then(res => {
+                        if (res.code) {
+                            _this.$message.error(res.sub_msg);
+                        } else {
+                            _this.coupon_info = res.result.data.coupon_info;
+                            let tmpObj = {
+                                url: res.result.data.coupon_click_url
+                            };
+                            resolve({requests: [tmpObj]})
                         }
-                    }
-                }).catch((err)=>{
-                    console.log(err)
+                    }).catch((err)=>{
+                        console.log(err)
+                    })
                 })
             },
             // 3.长链转短链接
             reqGetSpreadGet(params) {
                 let _this = this
-                http().getSpreadGet(params).then(res => {
-                    if (res.code) {
-                        _this.$message.error(res.sub_msg);
-                    } else {
-                        if(res.results.tbk_spread[0].err_msg !== 'OK'){
-                            _this.$message.error(res.results.tbk_spread[0].err_msg);
-                        }else {
-                            _this.shortUrl = res.results.tbk_spread[0].content;
-                            if(_this.selfText.trim()){
-                                return {
-                                    text: _this.selfText,
-                                    url: _this.shortUrl,
-                                    user_id: _this.pidObj.user_id
-                                };
+                // 请求频率过快，请隔1s再试
+                return new Promise((resolve, reject) => {
+                    clearTimeout(_this.timer);
+                    _this.timer = setTimeout(() => {
+                        http().getSpreadGet(params).then(res => {
+                            if (res.code) {
+                                _this.$message.error(res.sub_msg);
                             } else {
-                                _this.$message.error('文案为空');
+                                if(res.results.tbk_spread[0].err_msg !== 'OK'){
+                                    _this.$message.error(res.results.tbk_spread[0].err_msg);
+                                }else {
+                                    _this.shortUrl = res.results.tbk_spread[0].content;
+                                    if(_this.selfText.trim()){
+                                        resolve({
+                                            text: _this.selfText,
+                                            url: _this.shortUrl,
+                                            user_id: _this.pidObj.user_id
+                                        })
+                                    } else {
+                                        _this.$message.error('文案为空');
+                                    }
+                                }
                             }
-                        }
-                    }
-                }).catch((err)=>{
-                    console.log(err)
+                        }).catch((err)=>{
+                            console.log(err)
+                        })
+                    },1000)
                 })
             },
             // 4.生成淘口令
             reqGetTpwdCreate(params) {
                 let _this = this
-                http().getTpwdCreate(params).then(res => {
-                    if (res.code) {
-                        _this.$message.error(res.sub_msg);
-                    } else {
-                        if (_this.coupon_info){
-                            _this.selfTkl = `${_this.selfText}
+                return new Promise((resolve, reject) => {
+                    clearTimeout(_this.timer);
+                    _this.timer = setTimeout(() => {
+                        http().getTpwdCreate(params).then(res => {
+                            if (res.code) {
+                                _this.$message.error(res.sub_msg);
+                            } else {
+                                if (_this.coupon_info){
+                                    resolve(`${_this.selfText}
                                 优惠卷：${_this.coupon_info}
                                 链接：${_this.shortUrl}
                                 口令：${res.data.model}
-                            `
-                        } else {
-                            _this.selfTkl = `${_this.selfText}
+                            `)
+                                } else {
+                                    resolve(`${_this.selfText}
                                 链接：${_this.shortUrl}
                                 口令：${res.data.model}
-                            `
-                        }
-                        _this.$message({
-                            message: '生成淘口令成功',
-                            type: 'success',
-                            center: true,
-                        });
-                        // 自动复制到粘贴板
-                    }
-                }).catch((err)=>{
-                    console.log(err)
+                            `)
+                                }
+                                _this.$message({
+                                    message: '生成淘口令成功',
+                                    type: 'success',
+                                    center: true,
+                                });
+                            }
+                        }).catch((err)=>{
+                            console.log(err)
+                        })
+                    }, 1000)
                 })
             },
             clearTxt(){
