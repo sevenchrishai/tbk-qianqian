@@ -6,7 +6,7 @@ module.exports = {
         port: '2278',
         proxy: {
             '/api': {    //将www.example.com映射为/api
-                target: 'http://gateway.kouss.com/tbpub',  // 接口域名
+                target: 'https://gateway.kouss.com/tbpub',  // 接口域名
                 secure: false,  // 如果是https接口，需要配置这个参数
                 changeOrigin: true,  //是否跨域
                 pathRewrite: {
