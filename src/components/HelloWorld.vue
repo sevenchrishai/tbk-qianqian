@@ -78,8 +78,8 @@
                             :default-sort = "{prop: 'tb_otherTkl', order: 'descending'}"
                             stripe
                     >
-                        <el-table-column prop="tb_otherTkl" label="别人的淘口令"></el-table-column>
                         <el-table-column prop="tb_selfTkl" label="生成的自己的淘口令"></el-table-column>
+                        <el-table-column prop="tb_otherTkl" label="别人的淘口令"></el-table-column>
                     </el-table>
                 </div>
             </el-form-item>
@@ -97,11 +97,6 @@
                 //mm_669390059_989100147_109618950049
                 pid: '',
                 sessionKey: '',
-                pidObj: {
-                    site_id: '',    //三段式第二段：备案的网站id
-                    adzone_id: '',   //三段式第三段：推广位id
-                    user_id: ''
-                },
                 otherTkl: '',
                 selfTkl: '',
                 shortUrl: '',
@@ -118,15 +113,29 @@
         },
         created(){
             this.ifPidExist();
-            this.otherTkl = '干艾草泡脚中药包家用排毒祛濕草本足浴粉去张嘉倪濕气艾叶草同款 【包邮】\n' +
-                '【在售价】45.10元\n' +
-                '【券后价】5.10元\n' +
-                '【下单链接】https://m.tb.cn/h.VOr7gx4 \n' +
-                '----------------- \n' +
-                '注意，请完整复制这条信息，$R4wU1rfhJJQ$，到【手机淘宝】即可查看\n'
         },
         mounted(){
             this.copyBtn = new this.clipboard('.copy');
+        },
+        computed: {
+            pidObj: {
+                get: function() {
+                    let _this = this
+                    if (_this.pid.trim() !== ''){
+                        let pidArr = _this.pid.split('_');
+                        let len = pidArr.length;
+                        if (len>2){
+                            return {
+                                site_id: pidArr[len-2],
+                                adzone_id: pidArr[len-1],
+                                user_id: pidArr[len-3]
+                            }
+                        }
+                    }
+                    return null
+                },
+                set: function() {}
+            }
         },
         methods: {
             async onConvertSc() {
@@ -144,7 +153,6 @@
                         const spreadGet = await _this.reqGetSpreadGet(privilegeGet)
                         const tpwdCreate = await _this.reqGetTpwdCreate(spreadGet)
                         _this.selfTkl = _this.changeSelfText(_this.otherTkl, tpwdCreate.url, tpwdCreate.tkl)
-                        console.log(tpwdCreate)
                     } catch (e) {
                         console.log(e)
                     }
@@ -290,7 +298,6 @@
                 let _this = this;
                 if (_this.pid.trim() !== '' && _this.sessionKey.trim() !== ''){
                     let pidArr = _this.pid.split('_');
-                    console.log(pidArr)
                     let len = pidArr.length;
                     if (len>2){
                         _this.pidObj.site_id = pidArr[len-2];
@@ -301,7 +308,6 @@
                         _this.storage.set('qianqian_tkl_pid_json',_this.pidObj)
                     }
                 }
-
             },
             ifPidExist(){
                 let pid = this.storage.get('qianqian_tkl_pid');
@@ -369,8 +375,8 @@
                         let arr = []
                         da.map(v => {
                             let obj = {
-                                tb_otherTkl: v['别人的淘口令']?v['别人的淘口令']:'',
-                                tb_selfTkl: v['生成的自己的淘口令']?v['生成的自己的淘口令']:''
+                                tb_selfTkl: v['生成的自己的淘口令']?v['生成的自己的淘口令']:'',
+                                tb_otherTkl: v['别人的淘口令']?v['别人的淘口令']:''
                             };
                             arr.push(obj)
                         })
@@ -391,8 +397,8 @@
                 if (list.length>0){
                     this.downloadLoading = true;
                     import('@/vendor/Export2Excel').then(excel => {
-                        const tHeader = ['别人的淘口令', '生成的自己的淘口令'];
-                        const filterVal = ['tb_otherTkl', 'tb_selfTkl'];
+                        const tHeader = ['生成的自己的淘口令','别人的淘口令'];
+                        const filterVal = ['tb_selfTkl','tb_otherTkl'];
                         const data = this.formatJson(filterVal, list);
                         excel.export_json_to_excel({
                             titleName: 'DataTable',
@@ -412,25 +418,21 @@
             onMuchSc(){
                 console.log('批量生成！')
                 let _this = this
-                // if (_this.tableData2.length > 0) {
-                    //  * 尽量避免使用for循环请求，而要用递归的方式
-                    // _this.reqCount = _this.tableData2.length;
-                    _this.reqCount = 2;
-                    if(_this.reqCount > 0){  // 判断 1.是否请求成功 2.是否到达请求次数
-                        // let res = _this.onBatchConvertSc(_this.tableData2[_this.reqCount-1].tb_otherTkl)
-                        // res.then((data) => {
-                            // console.log(data)
-                            // if (data) {
-                                // _this.tableData2[_this.reqCount-1].tb_selfTkl = data;
-                                _this.reqCount--;
-                                clearTimeout(_this.timer);
-                                _this.timer = setTimeout(() => {
-                                    console.log(_this.reqCount)
-                                    _this.onMuchSc()
-                                }, 1000)
-                            // }
-                        // })
-                    // }
+                if (_this.tableData2.length > 0) { //* 尽量避免使用for循环请求，而要用递归的方式
+                    if (_this.reqCount === _this.tableData2.length) {
+                        return
+                    }
+                    let res = _this.onBatchConvertSc(_this.tableData2[_this.reqCount].tb_otherTkl)
+                    res.then((data) => {
+                        if (data) {
+                            _this.tableData2[_this.reqCount].tb_selfTkl = data;
+                            clearTimeout(_this.timer);
+                            _this.timer = setTimeout(() => {
+                                _this.reqCount++;
+                                _this.onMuchSc()
+                            }, 1000)
+                        }
+                    })
                 }
             }
         },
