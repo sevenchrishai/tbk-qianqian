@@ -1,7 +1,5 @@
 module.exports = {
-    publicPath: process.env.NODE_ENV === 'production'
-        ? '/tbk-qianqian/dist/'
-        : '/',
+    publicPath: '/',
     devServer: {
         port: '2278',
         proxy: {
